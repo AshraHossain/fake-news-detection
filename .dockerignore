@@ -1,0 +1,9 @@
+data/
+artifacts/
+graphify-out/
+.git/
+__pycache__/
+*.py[cod]
+.venv/
+README.md
+requirements-deep.txt
