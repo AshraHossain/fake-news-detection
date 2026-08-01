@@ -28,3 +28,24 @@ USER fnd
 
 ENTRYPOINT ["python", "-m", "fnd.cli"]
 CMD ["predict", "--text", "Paste an article here to classify it."]
+
+
+# HTTP service variant: docker build --target serve -t fnd-api .
+FROM python:3.12-slim AS serve
+
+ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1
+WORKDIR /app
+
+COPY requirements-api.txt requirements.txt ./
+RUN pip install --no-cache-dir -r requirements-api.txt
+
+COPY fnd/ fnd/
+COPY --from=builder /app/artifacts/baseline.joblib artifacts/baseline.joblib
+
+RUN useradd --create-home --uid 10001 fnd && chown -R fnd:fnd /app
+USER fnd
+
+EXPOSE 8000
+HEALTHCHECK --interval=30s --timeout=3s --start-period=10s \
+  CMD python -c "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://localhost:8000/health').status==200 else 1)"
+ENTRYPOINT ["uvicorn", "fnd.api:app", "--host", "0.0.0.0", "--port", "8000"]

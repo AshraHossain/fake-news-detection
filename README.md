@@ -1,5 +1,7 @@
 # Fake News Detection
 
+![ci](https://github.com/AshraHossain/fake-news-detection/actions/workflows/ci.yml/badge.svg)
+
 Binary FAKE/REAL classifier over the 6,335-article `news.csv` corpus (title + body).
 
 ## Results
@@ -63,6 +65,27 @@ docker run --rm fnd evaluate --data /app/data/news.csv
 `evaluate` and `train` need the corpus, which is not in the runtime image; mount
 it with `-v "$PWD/data:/app/data"`. `predict` needs nothing mounted.
 
+### HTTP API
+
+A FastAPI wrapper serves the same model over HTTP:
+
+```bash
+docker build --target serve -t fnd-api . && docker run --rm -p 8000:8000 fnd-api
+```
+
+```bash
+curl -X POST localhost:8000/predict -H 'content-type: application/json' \
+  -d '{"text":"The committee said Wednesday it would raise rates a quarter point."}'
+# {"label":"REAL","p_fake":0.22}
+```
+
+`GET /health` reports model readiness; interactive docs at `/docs`. Under-length
+or empty text returns `422`, not a guess. To run without Docker:
+
+```bash
+pip install -r requirements-api.txt && uvicorn fnd.api:app
+```
+
 Optional deep model:
 
 ```bash
@@ -76,6 +99,7 @@ pip install -r requirements-deep.txt && python -m fnd.cli deep-train
 | `fnd/data.py` | download, validate, clean, stratified split |
 | `fnd/model.py` | pipeline, train/evaluate/save/load/predict |
 | `fnd/deep.py` | optional GloVe + Conv1D + LSTM |
+| `fnd/api.py` | FastAPI `/predict` + `/health` |
 | `fnd/cli.py` | `download` / `train` / `evaluate` / `predict` / `deep-train` |
 | `tests/test_fnd.py` | assert-based self-check, no network |
 

@@ -1,0 +1,29 @@
+name: ci
+
+on:
+  push:
+    branches: [master, main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - run: pip install -r requirements.txt
+      - name: self-check
+        run: python tests/test_fnd.py
+
+  docker:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      # Build trains the model on the downloaded corpus, so a green build also
+      # proves the full train path works end to end.
+      - run: docker build -t fnd .
+      - name: predict smoke test
+        run: docker run --rm fnd predict --text "The committee said Wednesday it would raise rates a quarter point, citing labor market strength."
