@@ -1,5 +1,6 @@
-# Two stages so the 30 MB corpus and pip's build cache stay out of the final image;
-# only the trained artifact crosses over.
+# Multi-stage. The default (last) target is the CLI image, so `docker build -t fnd .`
+# gives you `fnd predict ...`. The HTTP service is an explicit target:
+#   docker build --target serve -t fnd-api .
 FROM python:3.12-slim AS builder
 
 WORKDIR /app
@@ -9,28 +10,11 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 COPY fnd/ fnd/
+# Corpus and pip cache stay in this stage; only the trained artifact crosses over.
 RUN python -m fnd.cli download && python -m fnd.cli train
 
 
-FROM python:3.12-slim
-
-ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1
-WORKDIR /app
-
-COPY --from=builder /usr/local/lib/python3.12/site-packages /usr/local/lib/python3.12/site-packages
-COPY fnd/ fnd/
-COPY tests/ tests/
-COPY --from=builder /app/artifacts/baseline.joblib artifacts/baseline.joblib
-
-# ponytail: no healthcheck — this is a batch CLI, not a long-running service.
-RUN useradd --create-home --uid 10001 fnd && chown -R fnd:fnd /app
-USER fnd
-
-ENTRYPOINT ["python", "-m", "fnd.cli"]
-CMD ["predict", "--text", "Paste an article here to classify it."]
-
-
-# HTTP service variant: docker build --target serve -t fnd-api .
+# HTTP service variant (explicit target, not the default).
 FROM python:3.12-slim AS serve
 
 ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1
@@ -49,3 +33,22 @@ EXPOSE 8000
 HEALTHCHECK --interval=30s --timeout=3s --start-period=10s \
   CMD python -c "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://localhost:8000/health').status==200 else 1)"
 ENTRYPOINT ["uvicorn", "fnd.api:app", "--host", "0.0.0.0", "--port", "8000"]
+
+
+# Default target: the batch CLI image. Must stay last so the bare build picks it.
+FROM python:3.12-slim AS cli
+
+ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1
+WORKDIR /app
+
+COPY --from=builder /usr/local/lib/python3.12/site-packages /usr/local/lib/python3.12/site-packages
+COPY fnd/ fnd/
+COPY tests/ tests/
+COPY --from=builder /app/artifacts/baseline.joblib artifacts/baseline.joblib
+
+# ponytail: no healthcheck — this is a batch CLI, not a long-running service.
+RUN useradd --create-home --uid 10001 fnd && chown -R fnd:fnd /app
+USER fnd
+
+ENTRYPOINT ["python", "-m", "fnd.cli"]
+CMD ["predict", "--text", "Paste an article here to classify it."]
