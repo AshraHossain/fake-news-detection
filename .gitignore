@@ -3,6 +3,8 @@ data/*.txt
 artifacts/*.joblib
 artifacts/*.keras
 graphify-out/cache/
+graphify-out/[0-9]*/
+graphify-out/.graphify_*
 __pycache__/
 *.py[cod]
 .venv/
